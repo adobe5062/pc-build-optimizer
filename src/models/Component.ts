@@ -10,6 +10,12 @@ export type ComponentType =
   | 'case'
   | 'cooler';
 
+export interface ComponentSpec {
+  key: string;
+  value: string | number;
+  unit?: string;
+}
+
 export interface Component {
   id: string;
   type: ComponentType;
@@ -17,6 +23,7 @@ export interface Component {
   brand: string;
   model: string;
   price: number;
+  specs: ComponentSpec[];
   imageUrl?: string;
 }
 
@@ -34,4 +41,11 @@ export interface PCBuild {
     cooler?: Component;
   };
   totalPrice: number;
+  compatibility?: CompatibilityIssue[];
+}
+
+export interface CompatibilityIssue {
+  severity: 'error' | 'warning' | 'info';
+  message: string;
+  components?: string[];
 }

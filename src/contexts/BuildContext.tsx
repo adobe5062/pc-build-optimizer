@@ -1,12 +1,15 @@
 // src/contexts/BuildContext.tsx
 import { createContext, useContext, useState, ReactNode } from 'react';
-import { Component, PCBuild, ComponentType } from '../models/Component';
+import { Component, PCBuild, ComponentType, CompatibilityIssue } from '../models/Component';
+import { checkCompatibility } from '../services/compatibilityService';
 
 interface BuildContextType {
   currentBuild: PCBuild | null;
   addComponent: (component: Component) => void;
   removeComponent: (type: ComponentType) => void;
   calculateTotal: () => number;
+  getCompatibilityIssues: () => CompatibilityIssue[];
+  checkComponentCompatibility: (component: Component) => CompatibilityIssue[];
 }
 
 const BuildContext = createContext<BuildContextType | undefined>(undefined);
@@ -17,19 +20,26 @@ export const BuildProvider = ({ children }: { children: ReactNode }) => {
     name: 'My New Build',
     components: {},
     totalPrice: 0,
+    compatibility: []
   });
 
   const addComponent = (component: Component) => {
     if (!currentBuild) return;
 
-    setCurrentBuild({
+    // Update the build with the new component
+    const updatedBuild: PCBuild = {
       ...currentBuild,
       components: {
         ...currentBuild.components,
         [component.type]: component,
       },
       totalPrice: calculateTotal(component),
-    });
+    };
+
+    // Check compatibility after adding the component
+    updatedBuild.compatibility = checkCompatibility(updatedBuild);
+    
+    setCurrentBuild(updatedBuild);
   };
 
   const removeComponent = (type: ComponentType) => {
@@ -38,11 +48,16 @@ export const BuildProvider = ({ children }: { children: ReactNode }) => {
     const updatedComponents = { ...currentBuild.components };
     delete updatedComponents[type];
 
-    setCurrentBuild({
+    const updatedBuild: PCBuild = {
       ...currentBuild,
       components: updatedComponents,
       totalPrice: calculateTotalAfterRemoval(type),
-    });
+    };
+
+    // Check compatibility after removing the component
+    updatedBuild.compatibility = checkCompatibility(updatedBuild);
+    
+    setCurrentBuild(updatedBuild);
   };
 
   const calculateTotal = (newComponent?: Component) => {
@@ -81,13 +96,36 @@ export const BuildProvider = ({ children }: { children: ReactNode }) => {
     return total;
   };
 
+  const getCompatibilityIssues = (): CompatibilityIssue[] => {
+    if (!currentBuild) return [];
+    
+    return currentBuild.compatibility || [];
+  };
+
+  const checkComponentCompatibility = (component: Component): CompatibilityIssue[] => {
+    if (!currentBuild) return [];
+    
+    // Create a temporary build with the component to check compatibility
+    const tempBuild: PCBuild = {
+      ...currentBuild,
+      components: {
+        ...currentBuild.components,
+        [component.type]: component,
+      },
+    };
+    
+    return checkCompatibility(tempBuild);
+  };
+
   return (
     <BuildContext.Provider
       value={{ 
         currentBuild, 
         addComponent, 
         removeComponent, 
-        calculateTotal 
+        calculateTotal,
+        getCompatibilityIssues,
+        checkComponentCompatibility
       }}
     >
       {children}

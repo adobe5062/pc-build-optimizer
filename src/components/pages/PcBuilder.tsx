@@ -15,17 +15,25 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
-  Divider
+  Divider,
+  Chip,
+  Tab,
+  Tabs,
+  Alert
 } from '@mui/material';
 import { useBuildContext } from '../../contexts/BuildContext';
 import { mockComponents } from '../../data/mockComponents';
 import { Component, ComponentType } from '../../models/Component';
+import CompatibilityChecker from '../pc-builder/CompatibilityChecker';
+import ComponentDetail from '../pc-builder/ComponentDetail';
 
 const PcBuilder = () => {
   const { currentBuild, addComponent, removeComponent } = useBuildContext();
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedType, setSelectedType] = useState<ComponentType>('cpu');
-
+  const [tabValue, setTabValue] = useState(0);
+  const [selectedComponent, setSelectedComponent] = useState<Component | null>(null);
+  
   const handleOpenDialog = (type: ComponentType) => {
     setSelectedType(type);
     setOpenDialog(true);
@@ -38,6 +46,14 @@ const PcBuilder = () => {
   const handleSelectComponent = (component: Component) => {
     addComponent(component);
     handleCloseDialog();
+  };
+  
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
+  const handleComponentClick = (component: Component) => {
+    setSelectedComponent(component);
   };
 
   // Filter components by the selected type
@@ -88,8 +104,13 @@ const PcBuilder = () => {
               variant="outlined" 
               sx={{ 
                 height: '100%',
-                borderColor: currentBuild?.components[type] ? 'primary.main' : undefined 
+                borderColor: currentBuild?.components[type] ? 'primary.main' : undefined,
+                cursor: currentBuild?.components[type] ? 'pointer' : 'default'
               }}
+              onClick={() => 
+                currentBuild?.components[type] && 
+                handleComponentClick(currentBuild.components[type] as Component)
+              }
             >
               <CardContent>
                 <Typography variant="h6" component="div">
@@ -107,14 +128,23 @@ const PcBuilder = () => {
                     <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
                       <Button 
                         size="small" 
-                        onClick={() => handleOpenDialog(type)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenDialog(type);
+                        }}
                       >
                         Change
                       </Button>
                       <Button 
                         size="small" 
                         color="error" 
-                        onClick={() => removeComponent(type)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeComponent(type);
+                          if (selectedComponent?.type === type) {
+                            setSelectedComponent(null);
+                          }
+                        }}
                       >
                         Remove
                       </Button>
@@ -145,22 +175,61 @@ const PcBuilder = () => {
             Total: ${currentBuild?.totalPrice.toFixed(2)}
           </Typography>
         </Box>
+        
+        {/* Compatibility Issues Section */}
+        <CompatibilityChecker />
+        
+        {/* Selected Component Details */}
+        {selectedComponent && (
+          <ComponentDetail component={selectedComponent} />
+        )}
       </Paper>
       
       {/* Component Selection Dialog */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
           Select {componentTypes.find(c => c.type === selectedType)?.label}
         </DialogTitle>
         <DialogContent>
+          <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 2 }}>
+            <Tab label="All Components" />
+            <Tab label="Compatible" />
+          </Tabs>
+          
+          {filteredComponents.length === 0 && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              No {componentTypes.find(c => c.type === selectedType)?.label} components found.
+            </Alert>
+          )}
+          
           <List>
             {filteredComponents.map((component, index) => (
               <div key={component.id}>
                 <ListItem disablePadding>
                   <ListItemButton onClick={() => handleSelectComponent(component)}>
                     <ListItemText 
-                      primary={component.name} 
-                      secondary={`${component.brand} • $${component.price.toFixed(2)}`} 
+                      primary={
+                        <Typography variant="body1">
+                          {component.name}
+                        </Typography>
+                      } 
+                      secondary={
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            {component.brand} • ${component.price.toFixed(2)}
+                          </Typography>
+                          <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {getDisplaySpecs(component).map((spec, i) => (
+                              <Chip 
+                                key={i} 
+                                label={`${spec.value}${spec.unit ? spec.unit : ''}`} 
+                                size="small" 
+                                variant="outlined" 
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      }
                     />
                   </ListItemButton>
                 </ListItem>
@@ -173,5 +242,45 @@ const PcBuilder = () => {
     </Container>
   );
 };
+
+// Helper function to get important specs for display in the component list
+function getDisplaySpecs(component: Component) {
+  switch (component.type) {
+    case 'cpu':
+      return component.specs.filter(spec => 
+        ['cores', 'threads', 'baseClock', 'boostClock'].includes(spec.key)
+      ).slice(0, 3);
+    case 'gpu':
+      return component.specs.filter(spec => 
+        ['memory', 'coreClock', 'boostClock'].includes(spec.key)
+      ).slice(0, 3);
+    case 'motherboard':
+      return component.specs.filter(spec => 
+        ['socket', 'formFactor', 'chipset'].includes(spec.key)
+      ).slice(0, 3);
+    case 'ram':
+      return component.specs.filter(spec => 
+        ['capacity', 'speed', 'type'].includes(spec.key)
+      ).slice(0, 3);
+    case 'storage':
+      return component.specs.filter(spec => 
+        ['capacity', 'type', 'readSpeed'].includes(spec.key)
+      ).slice(0, 3);
+    case 'psu':
+      return component.specs.filter(spec => 
+        ['wattage', 'certification', 'modular'].includes(spec.key)
+      ).slice(0, 3);
+    case 'case':
+      return component.specs.filter(spec => 
+        ['formFactor', 'maxGpuLength', 'maxCpuCoolerHeight'].includes(spec.key)
+      ).slice(0, 3);
+    case 'cooler':
+      return component.specs.filter(spec => 
+        ['type', 'radiatorSize', 'height'].includes(spec.key)
+      ).slice(0, 3);
+    default:
+      return component.specs.slice(0, 3);
+  }
+}
 
 export default PcBuilder;
